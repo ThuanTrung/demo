@@ -1,0 +1,160 @@
+@SpringBootTest
+@RunWith(MockitoJUnitRunner.class)
+public class SearchInventoryServiceTest {
+
+    @InjectMocks
+    private SearchInventoryService searchInventoryService;
+
+    @Mock
+    private KbnMasterService kbnMasterService;
+
+    @Mock
+    private AccountService accountService;
+
+    @Mock
+    private InventoryCycleService inventoryCycleService;
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void test_ValidRequest_ShouldReturnData() throws Exception {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setCategoryType("equipment");
+        request.setDeviceType("laptop");
+        request.setInventoryStatus("status");
+        request.setLoginUserId("00001");
+        request.setManagementGroup("admin");
+        request.setPage(1);
+        request.setPerPage(10);
+
+        // Mocking account
+        AccountsEntity mockAccount = new AccountsEntity();
+        mockAccount.setUserId("00001");
+        mockAccount.setDeviceAuthority(DeviceAuthorityTypeEnum.MASTER);
+
+        when(accountService.selectPk("00001")).thenReturn(mockAccount);
+
+        // Mocking cycle data
+        List<DevicePeriodDTO> mockCycleList = new ArrayList<>();
+        mockCycleList.add(new DevicePeriodDTO("equipment", "laptop", "2024-01-01", "2024-12-31", "Annual"));
+        
+        when(inventoryCycleService.getPeridDevice()).thenReturn(mockCycleList);
+
+        // Mocking inventory data
+        List<GetListDataInventoryDTO> mockInventoryList = new ArrayList<>();
+        mockInventoryList.add(new GetListDataInventoryDTO("equipment", "laptop", "admin", "10", "5", "status"));
+
+        when(searchInventoryService.getAssetDeviceByInventoryStatus(any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(mockInventoryList);
+
+        // When
+        SearchInventoriesReponse response = searchInventoryService.logic(request);
+
+        // Then
+        assertNotNull(response);
+        assertEquals(1, response.getPage());
+        assertEquals(10, response.getPerPage());
+        assertEquals(1, response.getInventoryDataList().size());
+
+        // Verify đúng số lần gọi phương thức
+        verify(accountService, times(1)).selectPk("00001");
+        verify(inventoryCycleService, times(1)).getPeridDevice();
+    }
+
+    @Test
+    public void test_UserNotFound_ShouldThrowException() {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setLoginUserId("99999");
+
+        when(accountService.selectPk("99999")).thenReturn(null);
+
+        // When & Then
+        Exception exception = assertThrows(Exception.class, () -> {
+            searchInventoryService.logic(request);
+        });
+
+        assertEquals("User not found", exception.getMessage());
+
+        verify(accountService, times(1)).selectPk("99999");
+    }
+
+    @Test
+    public void test_InvalidCategoryType_ShouldThrowException() {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setCategoryType("invalid-category");
+
+        // When & Then
+        Exception exception = assertThrows(Exception.class, () -> {
+            searchInventoryService.logic(request);
+        });
+
+        verify(kbnMasterService, never()).selectByTypeNames(any());
+    }
+
+    @Test
+    public void test_InvalidDeviceType_ShouldThrowException() {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setCategoryType("equipment");
+        request.setDeviceType("unknown-device");
+
+        // Mocking valid category
+        List<KbnMasterEntity> validCategories = new ArrayList<>();
+        validCategories.add(new KbnMasterEntity("equipment", "laptop"));
+
+        when(kbnMasterService.selectByTypeNames(any())).thenReturn(validCategories);
+
+        // When & Then
+        Exception exception = assertThrows(Exception.class, () -> {
+            searchInventoryService.logic(request);
+        });
+
+        verify(kbnMasterService, times(1)).selectByTypeNames(any());
+    }
+
+    @Test
+    public void test_NoInventoryCycle_ShouldReturnEmptyResponse() throws Exception {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setCategoryType("equipment");
+
+        when(inventoryCycleService.getPeridDevice()).thenReturn(Collections.emptyList());
+
+        // When
+        SearchInventoriesReponse response = searchInventoryService.logic(request);
+
+        // Then
+        assertNotNull(response);
+        assertEquals("0000", response.getResultCode());
+        assertTrue(response.getInventoryDataList().isEmpty());
+
+        verify(inventoryCycleService, times(1)).getPeridDevice();
+    }
+
+    @Test
+    public void test_EmptyInventoryStatus_ShouldUseDefaultValues() throws Exception {
+        // Given
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setInventoryStatus("");
+
+        List<DevicePeriodDTO> mockCycleList = new ArrayList<>();
+        mockCycleList.add(new DevicePeriodDTO("equipment", "laptop", "2024-01-01", "2024-12-31", "Annual"));
+
+        when(inventoryCycleService.getPeridDevice()).thenReturn(mockCycleList);
+
+        // When
+        SearchInventoriesReponse response = searchInventoryService.logic(request);
+
+        // Then
+        assertNotNull(response);
+        assertEquals("0000", response.getResultCode());
+
+        verify(inventoryCycleService, times(1)).getPeridDevice();
+    }
+}
