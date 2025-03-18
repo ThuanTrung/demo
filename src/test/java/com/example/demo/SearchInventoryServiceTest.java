@@ -177,4 +177,83 @@ class SearchInventoryServiceTest {
         String invalidDeviceType = "INVALID_DEVICE_TYPE";
         assertThrows(Exception.class, () -> searchInventoryService.getDeviceTypeList(Arrays.asList("FURNITURE"), invalidDeviceType));
     }
+    /// /
+    @Test
+    public void testLogic_GetPeriodDeviceIsEmpty() throws Exception {
+        // Tạo request
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+
+        // Mock dữ liệu: getPeridDevice trả về danh sách rỗng
+        when(inventoryCycleService.getPeridDevice()).thenReturn(Collections.emptyList());
+
+        // Gọi phương thức logic
+        SearchInventoriesResponse response = searchInventoryService.logic(request);
+
+        // Kiểm tra kết quả
+        assertNotNull(response);
+        assertEquals("0000", response.getResultCode());
+        assertEquals("loi", response.getMessage());
+    }
+
+    @Test
+    public void testLogic_InvalidInventoryStatus() throws Exception {
+        // Tạo request với inventoryStatus không hợp lệ
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setInventoryStatus("INVALID_STATUS");
+
+        // Mock dữ liệu: getPeridDevice trả về một danh sách không rỗng
+        when(inventoryCycleService.getPeridDevice()).thenReturn(Arrays.asList(new DevicePeriodDTO()));
+
+        // Kiểm tra xem phương thức logic có ném ra ngoại lệ không
+        assertThrows(Exception.class, () -> searchInventoryService.logic(request));
+    }
+
+    @Test
+    public void testLogic_ValidInventoryStatus() throws Exception {
+        // Tạo request với inventoryStatus hợp lệ
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+        request.setInventoryStatus(InventoryHistoryEnum.STATUS_CHECKED.getValue());
+
+        // Mock dữ liệu
+        when(inventoryCycleService.getPeridDevice()).thenReturn(Arrays.asList(new DevicePeriodDTO()));
+        when(accountsService.selectPk(anyString())).thenReturn(new AccountsEntity());
+
+        // Mock dữ liệu cho getAssetDeviceByInventoryStatus (nếu cần)
+        // Giả sử phương thức này được gọi từ một service khác hoặc từ chính SearchInventoryService
+        // Ví dụ:
+        // when(assetDeviceService.getAssetDeviceByInventoryStatus(anyList(), anyList(), anyInt(), anyInt(), anyList()))
+        //     .thenReturn(Arrays.asList(new GetListDataInventoryDTO()));
+
+        // Gọi phương thức logic
+        SearchInventoriesResponse response = searchInventoryService.logic(request);
+
+        // Kiểm tra kết quả
+        assertNotNull(response);
+        assertEquals("0000", response.getResultCode());
+        assertNotNull(response.getInventoryDataList());
+    }
+
+    @Test
+    public void testLogic_EmptyDeviceInventoryList() throws Exception {
+        // Tạo request
+        SearchInventoriesRequest request = new SearchInventoriesRequest();
+
+        // Mock dữ liệu
+        when(inventoryCycleService.getPeridDevice()).thenReturn(Arrays.asList(new DevicePeriodDTO()));
+        when(accountsService.selectPk(anyString())).thenReturn(new AccountsEntity());
+
+        // Mock dữ liệu: getAssetDeviceByInventoryStatus trả về danh sách rỗng
+        // Giả sử phương thức này được gọi từ một service khác hoặc từ chính SearchInventoryService
+        // Ví dụ:
+        // when(assetDeviceService.getAssetDeviceByInventoryStatus(anyList(), anyList(), anyInt(), anyInt(), anyList()))
+        //     .thenReturn(Collections.emptyList());
+
+        // Gọi phương thức logic
+        SearchInventoriesResponse response = searchInventoryService.logic(request);
+
+        // Kiểm tra kết quả
+        assertNotNull(response);
+        assertEquals("0000", response.getResultCode());
+        assertTrue(response.getInventoryDataList().isEmpty());
+    }
 }
